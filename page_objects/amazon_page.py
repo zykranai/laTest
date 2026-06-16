@@ -1,9 +1,4 @@
-"""
-Amazon Page Object.
-
-This class wraps the common user actions required by the assignment:
-open Amazon, search for a product, read the price, and add the item to cart.
-"""
+"""Page object for Amazon shopping flow used in this assignment."""
 
 import re
 from typing import Optional
@@ -16,19 +11,15 @@ from utilities.price_validator import is_valid_price
 
 
 class AmazonPage:
-    """Page Object for Amazon.com product search and cart workflows."""
+    """Handles search, product selection, price read, and add-to-cart flow."""
 
     def __init__(self, page: Page) -> None:
         self.page = page
         self.page.set_default_timeout(DEFAULT_TIMEOUT_MS)
         self._last_search_url: Optional[str] = None
 
-    # -------------------------------------------------------------------------
-    # Navigation helpers
-    # -------------------------------------------------------------------------
-
     def open_home_page(self) -> None:
-        """Navigate to Amazon and prepare the page for testing."""
+        """Open the homepage and set up the session for shopping."""
         self.page.goto(AMAZON_BASE_URL, wait_until="domcontentloaded")
         expect(self.page.locator("#twotabsearchtextbox")).to_be_visible(
             timeout=DEFAULT_TIMEOUT_MS
@@ -38,11 +29,7 @@ class AmazonPage:
         self._set_delivery_location_to_us()
 
     def _close_common_popups(self) -> None:
-        """
-        Close banners that appear on first visit.
-
-        Amazon may show cookie consent or regional prompts depending on location.
-        """
+        """Dismiss first-load popups (cookies, region prompts) when shown."""
         cookie_button = self.page.locator("#sp-cc-accept")
         if cookie_button.is_visible(timeout=3000):
             cookie_button.click()
@@ -61,7 +48,7 @@ class AmazonPage:
             stay_on_site.click()
 
     def _is_us_zip_set(self) -> bool:
-        """Check whether the header already shows the configured US zip code."""
+        """Return True if the configured zip code is already active."""
         location_label = self.page.locator("#glow-ingress-line2")
         if location_label.count() == 0:
             return False
@@ -69,16 +56,11 @@ class AmazonPage:
         return AMAZON_ZIP_CODE in current_text
 
     def _set_delivery_location_to_us(self) -> None:
-        """
-        Set a US zip code before shopping.
-
-        Without a US delivery location, Amazon often hides prices and the
-        add-to-cart button for international visitors.
-        """
+        """Set a US zip code so product prices and cart options stay visible."""
         if self._is_us_zip_set():
             return
 
-        # Try twice — the first request establishes cookies, the second often sticks
+        # Two attempts help in sessions where the first request only sets cookies.
         for _ in range(2):
             response = self.page.request.post(
                 f"{AMAZON_BASE_URL}/gp/delivery/ajax/address-change.html",
@@ -103,12 +85,8 @@ class AmazonPage:
             "Prices and add-to-cart may not be available."
         )
 
-    # -------------------------------------------------------------------------
-    # Search and product selection
-    # -------------------------------------------------------------------------
-
     def search_product(self, keyword: str) -> None:
-        """Search Amazon using the keyword and wait for results to load."""
+        """Run a search and wait until result cards are visible."""
         self._last_search_url = f"{AMAZON_BASE_URL}/s?k={quote_plus(keyword)}"
         self.page.goto(self._last_search_url, wait_until="domcontentloaded")
 
@@ -116,19 +94,14 @@ class AmazonPage:
         expect(results.first).to_be_visible(timeout=DEFAULT_TIMEOUT_MS)
 
     def _return_to_search_results(self) -> None:
-        """Go back to the search results page when a product row is not usable."""
+        """Return to the search page if the opened product is not usable."""
         if self._last_search_url:
             self.page.goto(self._last_search_url, wait_until="domcontentloaded")
             return
         self.page.go_back(wait_until="domcontentloaded")
 
     def open_first_purchasable_product(self) -> str:
-        """
-        Open a product from the result list and return its price.
-
-        The first result is not always purchasable (sponsored items, accessories,
-        out-of-stock listings), so we try a few rows before failing.
-        """
+        """Open the first result that has both a valid price and add-to-cart."""
         results = self.page.locator('[data-component-type="s-search-result"]')
         expect(results.first).to_be_visible(timeout=DEFAULT_TIMEOUT_MS)
 
@@ -165,7 +138,7 @@ class AmazonPage:
         )
 
     def _get_product_link(self, result_row: Locator) -> Optional[Locator]:
-        """Return the first usable product link inside a search result row."""
+        """Pick the first clickable product link from a result row."""
         link_selectors = [
             "a.a-link-normal[href*='/dp/']",
             ".s-title-instructions-style a",
@@ -181,7 +154,7 @@ class AmazonPage:
 
     @staticmethod
     def _extract_price_text(price_locator: Locator) -> Optional[str]:
-        """Safely read price text when the locator is present."""
+        """Read text from a price locator when available."""
         if price_locator.count() == 0:
             return None
 
@@ -192,7 +165,7 @@ class AmazonPage:
         return None
 
     def read_product_price(self) -> str:
-        """Read the product price from the detail page."""
+        """Read product price on the detail page using common selector fallbacks."""
         price_selectors = [
             "#corePrice_feature_div .a-offscreen",
             "#corePriceDisplay_desktop_feature_div .a-offscreen",
@@ -211,7 +184,7 @@ class AmazonPage:
                     if "cannot be shipped" not in cleaned_price.lower():
                         return cleaned_price
 
-        # Some pages split the price into whole and fraction spans
+        # Some pages split price into whole/fraction spans.
         whole_part = self.page.locator("span.a-price-whole").first
         fraction_part = self.page.locator("span.a-price-fraction").first
         if whole_part.count() > 0:
@@ -222,12 +195,8 @@ class AmazonPage:
 
         raise AssertionError("Product price was not visible on the page.")
 
-    # -------------------------------------------------------------------------
-    # Cart actions
-    # -------------------------------------------------------------------------
-
     def add_product_to_cart(self) -> None:
-        """Click add to cart and verify that the action succeeded."""
+        """Add the selected product to cart and verify success."""
         self._close_blocking_dialogs()
         self._choose_default_variants_if_needed()
 
@@ -238,13 +207,13 @@ class AmazonPage:
         try:
             add_to_cart_button.click(timeout=10000)
         except Exception:
-            # Some product layouts need a forced click after variant selection
+            # A few layouts need a forced click after variant selection.
             add_to_cart_button.click(force=True)
 
         self._verify_item_added_to_cart()
 
     def _close_blocking_dialogs(self) -> None:
-        """Close sponsored-content dialogs that can sit on top of the page."""
+        """Close dialogs that can block clicks on the product page."""
         close_buttons = self.page.get_by_role("button", name=re.compile(r"^close$", re.I))
         for index in range(close_buttons.count()):
             button = close_buttons.nth(index)
@@ -252,11 +221,7 @@ class AmazonPage:
                 button.click()
 
     def _choose_default_variants_if_needed(self) -> None:
-        """
-        Pick default color/size when Amazon requires a variant selection.
-
-        Many phones and accessories won't enable add-to-cart until a variant is chosen.
-        """
+        """Choose a default variant when Amazon requires color/size selection."""
         dropdown_fields = self.page.locator(
             "#variation_color_name select, #variation_size_name select"
         )
@@ -277,7 +242,7 @@ class AmazonPage:
                 break
 
     def _find_add_to_cart_button(self) -> Locator:
-        """Locate the real add-to-cart button on the product page."""
+        """Find the primary add-to-cart button."""
         button_candidates = [
             self.page.locator("#add-to-cart-button").first,
             self.page.locator("#submit.add-to-cart-button").first,
@@ -291,7 +256,7 @@ class AmazonPage:
         return self.page.locator("#add-to-cart-button").first
 
     def _is_add_to_cart_available(self) -> bool:
-        """Check whether the current product page supports add-to-cart."""
+        """Check if add-to-cart is available on the current product page."""
         button = self.page.locator("#add-to-cart-button").first
         return button.count() > 0 and button.is_visible()
 
@@ -316,20 +281,8 @@ class AmazonPage:
         )
         expect(added_message.first).to_be_attached(timeout=DEFAULT_TIMEOUT_MS)
 
-    # -------------------------------------------------------------------------
-    # End-to-end flow used by both assignment test cases
-    # -------------------------------------------------------------------------
-
     def search_add_to_cart_and_get_price(self, keyword: str) -> str:
-        """
-        Run the full assignment workflow for a given search keyword.
-
-        Steps:
-        1. Open Amazon
-        2. Search for the product
-        3. Open a valid result and read the price
-        4. Add the product to cart
-        """
+        """Run the complete assignment flow and return the captured price."""
         self.open_home_page()
         self.search_product(keyword)
         product_price = self.open_first_purchasable_product()

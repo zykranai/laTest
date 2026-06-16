@@ -1,8 +1,8 @@
 # Amazon Automation Assignment
 
-Public repository for the **Automation Engineering Assignment** (Jun 2026).
+This repository contains my submission for the **Automation Engineering Assignment** (Jun 2026).
 
-This project automates two Amazon.com shopping scenarios using **Python**, **Playwright**, and **pytest**, with **parallel test execution** and optional **LambdaTest** cloud support.
+The project automates two Amazon.com shopping scenarios using **Python**, **Playwright**, and **pytest**, with **parallel execution** and optional **LambdaTest** cloud support.
 
 **Repository:** [https://github.com/zykranai/laTest](https://github.com/zykranai/laTest)  
 **Default branch:** `master`
@@ -116,6 +116,8 @@ Tests also run in GitHub Actions on push and pull requests to `master`.
 
 - Workflow file: `.github/workflows/run-tests.yml`
 - You can trigger a manual run from the **Actions** tab using **workflow_dispatch**
+- CI runs with retries (`--reruns 2`) to reduce live-site flakiness
+- Failure screenshots are uploaded as workflow artifacts when tests fail
 
 ### Sample console output
 
@@ -148,13 +150,14 @@ Test results, video, and logs will appear in the LambdaTest Web Automation dashb
 
 ---
 
-## Design Approach
+## Design Notes
 
 - **Page Object Model (POM)** keeps UI locators away from test files.
 - **Separate test files** map directly to the two assignment test cases.
 - **Shared config and test data** reduce duplication and make updates easier.
 - **Parallel-safe fixtures** give each worker its own browser session.
 - **US delivery setup** improves price visibility and add-to-cart reliability on Amazon.com.
+- **Failure screenshots** are saved locally (and uploaded in CI) when tests fail.
 
 ---
 

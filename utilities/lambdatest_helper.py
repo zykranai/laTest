@@ -1,8 +1,4 @@
-"""
-LambdaTest integration helpers.
-
-Reference: https://www.lambdatest.com/support/docs/playwright-testing/
-"""
+"""Helper functions for running Playwright tests on LambdaTest cloud."""
 
 import json
 import subprocess
@@ -14,19 +10,19 @@ from config import test_config
 
 
 def get_playwright_version() -> str:
-    """Read the locally installed Playwright version for LambdaTest compatibility."""
+    """Read local Playwright version to include in LambdaTest capabilities."""
     try:
         output = subprocess.check_output(
             ["playwright", "--version"], text=True, stderr=subprocess.STDOUT
         )
         return output.strip().split()[-1]
     except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
-        # Fallback keeps cloud runs working even if CLI lookup fails
+        # Keep cloud runs working even if CLI lookup fails.
         return "latest"
 
 
 def build_lambdatest_cdp_url(test_name: str) -> str:
-    """Build the WebSocket URL used to connect Playwright to LambdaTest."""
+    """Build the CDP WebSocket URL for LambdaTest execution."""
     capabilities = {
         "browserName": test_config.LT_BROWSER,
         "browserVersion": "latest",
@@ -47,7 +43,7 @@ def build_lambdatest_cdp_url(test_name: str) -> str:
 
 
 def report_test_status(page: Page, status: str, remark: str) -> None:
-    """Send pass/fail status back to the LambdaTest dashboard."""
+    """Send pass/fail status to the LambdaTest dashboard."""
     if not test_config.RUN_ON_LAMBDATEST:
         return
 

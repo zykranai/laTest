@@ -1,9 +1,4 @@
-"""
-Shared pytest fixtures for browser setup.
-
-Each test gets its own browser instance so Test Case 1 and Test Case 2
-can run safely in parallel with pytest-xdist.
-"""
+"""Pytest fixtures used by local and LambdaTest runs."""
 
 from pathlib import Path
 
@@ -18,11 +13,7 @@ SCREENSHOT_DIR = Path(__file__).resolve().parent / "test-results" / "screenshots
 
 @pytest.fixture(scope="function")
 def browser(request: pytest.FixtureRequest) -> Browser:
-    """
-    Start a local Chromium browser or connect to LambdaTest cloud.
-
-    A function-scoped fixture keeps parallel workers isolated from each other.
-    """
+    """Start browser for one test case (local or cloud)."""
     test_name = request.node.name
 
     with sync_playwright() as playwright:
@@ -45,7 +36,7 @@ def browser(request: pytest.FixtureRequest) -> Browser:
 
 @pytest.fixture(scope="function")
 def page(browser: Browser, request: pytest.FixtureRequest) -> Page:
-    """Provide a fresh browser tab for each test case."""
+    """Create an isolated page for each test case."""
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
         locale="en-US",
@@ -54,7 +45,7 @@ def page(browser: Browser, request: pytest.FixtureRequest) -> Page:
 
     yield page
 
-    # Capture a screenshot when a test fails — useful for debugging Amazon UI issues
+    # Save a screenshot on failure so it is easier to debug flaky UI behavior.
     test_report = getattr(request.node, "rep_call", None)
     if test_report is not None and test_report.failed:
         SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,11 +65,7 @@ def page(browser: Browser, request: pytest.FixtureRequest) -> Page:
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> None:
-    """
-    Store the test result on the item object.
-
-    This lets the page fixture know whether the test passed or failed.
-    """
+    """Attach pytest phase reports to the test item for fixture teardown logic."""
     outcome = yield
     report = outcome.get_result()
     setattr(item, f"rep_{report.when}", report)
