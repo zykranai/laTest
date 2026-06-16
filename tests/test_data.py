@@ -5,8 +5,8 @@ Keeping search terms here makes it easy to update product keywords
 without digging into individual test files.
 """
 
-# Test Case 1 - iPhone search keyword
+# Test Case 1 - search for any iPhone (assignment requirement)
 IPHONE_SEARCH_KEYWORD = "iPhone"
 
-# Test Case 2 - Galaxy device search keyword
-GALAXY_SEARCH_KEYWORD = "Samsung Galaxy S24"
+# Test Case 2 - search for any Galaxy device (assignment requirement)
+GALAXY_SEARCH_KEYWORD = "Samsung Galaxy"

@@ -1,4 +1,5 @@
-pytest>=8.0.0
-pytest-xdist>=3.5.0
-playwright>=1.40.0
-python-dotenv>=1.0.0
+pytest==8.4.2
+pytest-xdist==3.8.0
+pytest-rerunfailures==15.1
+playwright==1.60.0
+python-dotenv==1.2.1

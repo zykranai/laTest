@@ -12,6 +12,7 @@ from urllib.parse import quote_plus
 from playwright.sync_api import Locator, Page, expect
 
 from config.test_config import AMAZON_BASE_URL, AMAZON_ZIP_CODE, DEFAULT_TIMEOUT_MS
+from utilities.price_validator import is_valid_price
 
 
 class AmazonPage:
@@ -20,6 +21,7 @@ class AmazonPage:
     def __init__(self, page: Page) -> None:
         self.page = page
         self.page.set_default_timeout(DEFAULT_TIMEOUT_MS)
+        self._last_search_url: Optional[str] = None
 
     # -------------------------------------------------------------------------
     # Navigation helpers
@@ -58,6 +60,14 @@ class AmazonPage:
         if stay_on_site.is_visible(timeout=2000):
             stay_on_site.click()
 
+    def _is_us_zip_set(self) -> bool:
+        """Check whether the header already shows the configured US zip code."""
+        location_label = self.page.locator("#glow-ingress-line2")
+        if location_label.count() == 0:
+            return False
+        current_text = location_label.text_content() or ""
+        return AMAZON_ZIP_CODE in current_text
+
     def _set_delivery_location_to_us(self) -> None:
         """
         Set a US zip code before shopping.
@@ -65,29 +75,33 @@ class AmazonPage:
         Without a US delivery location, Amazon often hides prices and the
         add-to-cart button for international visitors.
         """
-        location_label = self.page.locator("#glow-ingress-line2")
-        if location_label.count() > 0:
-            current_text = location_label.text_content() or ""
-            if AMAZON_ZIP_CODE in current_text:
-                return
-
-        # Amazon exposes a lightweight address-change endpoint used by the site UI
-        response = self.page.request.post(
-            f"{AMAZON_BASE_URL}/gp/delivery/ajax/address-change.html",
-            form={
-                "locationType": "LOCATION_INPUT",
-                "zipCode": AMAZON_ZIP_CODE,
-                "storeContext": "generic",
-                "deviceType": "web",
-                "pageType": "Gateway",
-                "actionSource": "glow",
-            },
-        )
-        if not response.ok:
+        if self._is_us_zip_set():
             return
 
-        # Refresh once so the updated delivery location is reflected in the DOM
-        self.page.goto(AMAZON_BASE_URL, wait_until="domcontentloaded")
+        # Try twice — the first request establishes cookies, the second often sticks
+        for _ in range(2):
+            response = self.page.request.post(
+                f"{AMAZON_BASE_URL}/gp/delivery/ajax/address-change.html",
+                form={
+                    "locationType": "LOCATION_INPUT",
+                    "zipCode": AMAZON_ZIP_CODE,
+                    "storeContext": "generic",
+                    "deviceType": "web",
+                    "pageType": "Gateway",
+                    "actionSource": "glow",
+                },
+            )
+            if not response.ok:
+                continue
+
+            self.page.goto(AMAZON_BASE_URL, wait_until="domcontentloaded")
+            if self._is_us_zip_set():
+                return
+
+        raise AssertionError(
+            f"Could not set US delivery location to zip code {AMAZON_ZIP_CODE}. "
+            "Prices and add-to-cart may not be available."
+        )
 
     # -------------------------------------------------------------------------
     # Search and product selection
@@ -95,11 +109,18 @@ class AmazonPage:
 
     def search_product(self, keyword: str) -> None:
         """Search Amazon using the keyword and wait for results to load."""
-        search_url = f"{AMAZON_BASE_URL}/s?k={quote_plus(keyword)}"
-        self.page.goto(search_url, wait_until="domcontentloaded")
+        self._last_search_url = f"{AMAZON_BASE_URL}/s?k={quote_plus(keyword)}"
+        self.page.goto(self._last_search_url, wait_until="domcontentloaded")
 
         results = self.page.locator('[data-component-type="s-search-result"]')
         expect(results.first).to_be_visible(timeout=DEFAULT_TIMEOUT_MS)
+
+    def _return_to_search_results(self) -> None:
+        """Go back to the search results page when a product row is not usable."""
+        if self._last_search_url:
+            self.page.goto(self._last_search_url, wait_until="domcontentloaded")
+            return
+        self.page.go_back(wait_until="domcontentloaded")
 
     def open_first_purchasable_product(self) -> str:
         """
@@ -129,12 +150,12 @@ class AmazonPage:
             except AssertionError:
                 product_price = listing_price
 
-            if not product_price:
-                self.page.go_back(wait_until="domcontentloaded")
+            if not product_price or not is_valid_price(product_price):
+                self._return_to_search_results()
                 continue
 
             if not self._is_add_to_cart_available():
-                self.page.go_back(wait_until="domcontentloaded")
+                self._return_to_search_results()
                 continue
 
             return product_price
@@ -213,10 +234,13 @@ class AmazonPage:
         add_to_cart_button = self._find_add_to_cart_button()
         expect(add_to_cart_button).to_be_visible()
         add_to_cart_button.scroll_into_view_if_needed()
-        add_to_cart_button.click(force=True)
 
-        # Give Amazon a moment to render the confirmation banner/side panel
-        self.page.wait_for_timeout(1500)
+        try:
+            add_to_cart_button.click(timeout=10000)
+        except Exception:
+            # Some product layouts need a forced click after variant selection
+            add_to_cart_button.click(force=True)
+
         self._verify_item_added_to_cart()
 
     def _close_blocking_dialogs(self) -> None:
@@ -226,7 +250,6 @@ class AmazonPage:
             button = close_buttons.nth(index)
             if button.is_visible():
                 button.click()
-                self.page.wait_for_timeout(500)
 
     def _choose_default_variants_if_needed(self) -> None:
         """
@@ -284,16 +307,14 @@ class AmazonPage:
         ]
 
         for selector in confirmation_selectors:
-            if self.page.locator(selector).count() > 0:
+            locator = self.page.locator(selector)
+            if locator.count() > 0:
                 return
 
         added_message = self.page.get_by_text(
             re.compile(r"added to (cart|your cart)", re.I)
         )
-        if added_message.count() > 0:
-            return
-
-        raise AssertionError("Add to cart confirmation was not detected.")
+        expect(added_message.first).to_be_attached(timeout=DEFAULT_TIMEOUT_MS)
 
     # -------------------------------------------------------------------------
     # End-to-end flow used by both assignment test cases

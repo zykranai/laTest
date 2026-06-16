@@ -13,7 +13,7 @@ jobs:
   run-tests:
     name: Playwright Tests (Parallel)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -40,4 +40,12 @@ jobs:
           AMAZON_BASE_URL: https://www.amazon.com
           AMAZON_ZIP_CODE: "10001"
           DEFAULT_TIMEOUT_MS: "45000"
-        run: pytest -n 2 -s
+        run: pytest -n 2 -s --reruns 2 --reruns-delay 5
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshots
+          path: test-results/screenshots/
+          if-no-files-found: ignore

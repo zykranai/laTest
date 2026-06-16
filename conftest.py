@@ -5,11 +5,15 @@ Each test gets its own browser instance so Test Case 1 and Test Case 2
 can run safely in parallel with pytest-xdist.
 """
 
+from pathlib import Path
+
 import pytest
 from playwright.sync_api import Browser, Page, sync_playwright
 
 from config import test_config
 from utilities.lambdatest_helper import build_lambdatest_cdp_url, report_test_status
+
+SCREENSHOT_DIR = Path(__file__).resolve().parent / "test-results" / "screenshots"
 
 
 @pytest.fixture(scope="function")
@@ -50,9 +54,17 @@ def page(browser: Browser, request: pytest.FixtureRequest) -> Page:
 
     yield page
 
-    # Report final status to LambdaTest when running in cloud mode
+    # Capture a screenshot when a test fails — useful for debugging Amazon UI issues
     test_report = getattr(request.node, "rep_call", None)
     if test_report is not None and test_report.failed:
+        SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        screenshot_path = SCREENSHOT_DIR / f"{request.node.name}.png"
+        try:
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            print(f"\nScreenshot saved to: {screenshot_path}")
+        except Exception as screenshot_error:
+            print(f"\nCould not capture screenshot: {screenshot_error}")
+
         report_test_status(page, "failed", str(test_report.longrepr))
     elif test_report is not None:
         report_test_status(page, "passed", "Test completed successfully")
