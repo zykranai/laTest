@@ -1,0 +1,43 @@
+name: Amazon Automation Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  run-tests:
+    name: Playwright Tests (Parallel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run test suite in parallel
+        env:
+          HEADLESS: "true"
+          AMAZON_BASE_URL: https://www.amazon.com
+          AMAZON_ZIP_CODE: "10001"
+          DEFAULT_TIMEOUT_MS: "45000"
+        run: pytest -n 2 -s

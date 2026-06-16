@@ -7,6 +7,8 @@ This project automates two Amazon.com shopping scenarios using **Python**, **Pla
 **Repository:** [https://github.com/zykranai/laTest](https://github.com/zykranai/laTest)  
 **Default branch:** `master`
 
+GitHub Actions runs the parallel test suite automatically on every push to `master`.
+
 ---
 
 ## Assignment Coverage
@@ -106,6 +108,13 @@ HEADLESS=false pytest -n 2 -s
 pytest tests/test_case_01_iphone_cart.py -s
 pytest tests/test_case_02_galaxy_cart.py -s
 ```
+
+### Continuous Integration
+
+Tests also run in GitHub Actions on push and pull requests to `master`.
+
+- Workflow file: `.github/workflows/run-tests.yml`
+- You can trigger a manual run from the **Actions** tab using **workflow_dispatch**
 
 ### Sample console output
 
