@@ -16,7 +16,7 @@ GitHub Actions runs the parallel test suite automatically on every push to `mast
 | Test Case | File | Search Keyword | Verification |
 |-----------|------|----------------|--------------|
 | Test Case 1 | `tests/test_case_01_iphone_cart.py` | iPhone | Print device price to console |
-| Test Case 2 | `tests/test_case_02_galaxy_cart.py` | Samsung Galaxy S24 | Print device price to console |
+| Test Case 2 | `tests/test_case_02_galaxy_cart.py` | Samsung Galaxy | Print device price to console |
 
 Both tests are designed to run **in parallel** using `pytest-xdist`.
 
@@ -35,7 +35,8 @@ laTest/
 │   ├── test_case_01_iphone_cart.py # Assignment Test Case 1
 │   └── test_case_02_galaxy_cart.py # Assignment Test Case 2
 ├── utilities/
-│   └── lambdatest_helper.py        # LambdaTest cloud helpers
+│   ├── lambdatest_helper.py        # LambdaTest cloud helpers
+│   └── price_validator.py          # Price format validation
 ├── conftest.py                     # Browser fixtures
 ├── pytest.ini                      # Pytest configuration
 ├── requirements.txt                # Python dependencies
